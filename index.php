@@ -2,7 +2,8 @@
 
 namespace KD2\WebDAV
 {
-	
+	// error_reporting(0);
+
 	class Exception extends \RuntimeException {}
 
 	class Server
@@ -34,32 +35,32 @@ namespace KD2\WebDAV
 		const SHARED_LOCK = 'shared';
 		const EXCLUSIVE_LOCK = 'exclusive';
 
-		protected bool $enable_gzip = true;
+		protected $enable_gzip = true;
 
-		protected string $base_uri;
+		protected $base_uri;
 
-		public string $original_uri;
+		public $original_uri;
 
-		public string $prefix = '';
+		public $prefix = '';
 
-		protected AbstractStorage $storage;
+		protected $storage;
 
-		public function setStorage(AbstractStorage $storage)
+		public function setStorage($storage)
 		{
 			$this->storage = $storage;
 		}
 
-		public function getStorage(): AbstractStorage
+		public function getStorage()
 		{
 			return $this->storage;
 		}
 
-		public function setBaseURI(string $uri): void
+		public function setBaseURI($uri)
 		{
 			$this->base_uri = rtrim($uri, '/') . '/';
 		}
 
-		protected function extendExecutionTime(): void
+		protected function extendExecutionTime()
 		{
 			if (false === strpos(@ini_get('disable_functions'), 'set_time_limit')) {
 				@set_time_limit(3600);
@@ -69,7 +70,7 @@ namespace KD2\WebDAV
 			@ini_set('max_input_time', '3600');
 		}
 
-		protected function _prefix(string $uri): string
+		protected function _prefix($uri)
 		{
 			if (!$this->prefix) {
 				return $uri;
@@ -78,7 +79,7 @@ namespace KD2\WebDAV
 			return rtrim(rtrim($this->prefix, '/') . '/' . ltrim($uri, '/'), '/');
 		}
 
-		protected function html_directory(string $uri, iterable $list): ?string
+		protected function html_directory($uri, $list)
 		{
 			// Not a file: let's serve a directory listing if you are browsing with a web browser
 			if (substr($this->original_uri, -1) != '/') {
@@ -148,7 +149,7 @@ namespace KD2\WebDAV
 			return $out;
 		}
 
-		public function http_delete(string $uri): ?string
+		public function http_delete($uri)
 		{
 			// check RFC 2518 Section 9.2, last paragraph
 			if (isset($_SERVER['HTTP_DEPTH']) && $_SERVER['HTTP_DEPTH'] != 'infinity') {
@@ -170,7 +171,7 @@ namespace KD2\WebDAV
 			return null;
 		}
 
-		public function http_put(string $uri): ?string
+		public function http_put($uri)
 		{
 			if (!empty($_SERVER['HTTP_CONTENT_TYPE']) && !strncmp($_SERVER['HTTP_CONTENT_TYPE'], 'multipart/', 10)) {
 				throw new Exception('Multipart PUT requests are not supported', 501);
@@ -227,7 +228,7 @@ namespace KD2\WebDAV
 
 			// Specific to NextCloud/ownCloud, to allow setting file mtime
 			// This expects a UNIX timestamp
-			$mtime = (int)($_SERVER['HTTP_X_OC_MTIME'] ?? 0) ?: null;
+			$mtime = isset($_SERVER['HTTP_X_OC_MTIME']) ? intval($_SERVER['HTTP_X_OC_MTIME']) : 0;
 
 			if ($mtime) {
 				header('X-OC-MTime: accepted');
@@ -239,7 +240,7 @@ namespace KD2\WebDAV
 
 			// mod_fcgid <= 2.3.9 doesn't handle chunked transfer encoding for PUT requests
 			// see https://github.com/kd2org/picodav/issues/6
-			if (strstr($_SERVER['HTTP_TRANSFER_ENCODING'] ?? '', 'chunked') && PHP_SAPI == 'fpm-fcgi') {
+			if (strstr(isset($_SERVER['HTTP_TRANSFER_ENCODING']) ? $_SERVER['HTTP_TRANSFER_ENCODING'] : '', 'chunked') && PHP_SAPI == 'fpm-fcgi') {
 				// We can't seek here
 				// see https://github.com/php/php-src/issues/9441
 				$l = strlen(fread($stream, 1));
@@ -270,7 +271,7 @@ namespace KD2\WebDAV
 			return null;
 		}
 
-		public function http_head(string $uri, array &$props = []): ?string
+		public function http_head($uri, &$props = [])
 		{
 			$uri = $this->_prefix($uri);
 
@@ -292,7 +293,7 @@ namespace KD2\WebDAV
 
 			if (isset($props['DAV::getlastmodified'])
 				&& $props['DAV::getlastmodified'] instanceof \DateTimeInterface) {
-				header(sprintf('Last-Modified: %s', $props['DAV::getlastmodified']->format(\DATE_RFC7231)));
+				header(sprintf('Last-Modified: %s', $props['DAV::getlastmodified']->format('D, d M Y H:i:s \G\M\T')));
 			}
 
 			if (!empty($props['DAV::getetag'])) {
@@ -323,7 +324,7 @@ namespace KD2\WebDAV
 			return null;
 		}
 
-		public function http_get(string $uri): ?string
+		public function http_get($uri)
 		{
 			$props = [];
 			$this->http_head($uri, $props);
@@ -334,7 +335,7 @@ namespace KD2\WebDAV
 			$out = '';
 
 			if ($is_collection) {
-				$list = $this->storage->list($uri, self::BASIC_PROPERTIES);
+				$list = $this->storage->list_($uri, self::BASIC_PROPERTIES);
 
 				if (!isset($_SERVER['HTTP_ACCEPT']) || false === strpos($_SERVER['HTTP_ACCEPT'], 'html')) {
 					$list = is_array($list) ? $list : iterator_to_array($list);
@@ -522,22 +523,22 @@ namespace KD2\WebDAV
 			return null;
 		}
 
-		public function http_copy(string $uri): ?string
+		public function http_copy($uri)
 		{
 			return $this->_http_copymove($uri, 'copy');
 		}
 
-		public function http_move(string $uri): ?string
+		public function http_move($uri)
 		{
 			return $this->_http_copymove($uri, 'move');
 		}
 
-		protected function _http_copymove(string $uri, string $method): ?string
+		protected function _http_copymove($uri, $method)
 		{
 			$uri = $this->_prefix($uri);
 
-			$destination = $_SERVER['HTTP_DESTINATION'] ?? null;
-			$depth = $_SERVER['HTTP_DEPTH'] ?? 1;
+			$destination = $_SERVER['HTTP_DESTINATION'] ?: null;
+			$depth = $_SERVER['HTTP_DEPTH'] ?: 1;
 
 			if (!$destination) {
 				throw new Exception('Destination not supplied', 400);
@@ -549,7 +550,7 @@ namespace KD2\WebDAV
 				throw new Exception('Cannot move file to itself', 403);
 			}
 
-			$overwrite = ($_SERVER['HTTP_OVERWRITE'] ?? null) == 'T';
+			$overwrite = ($_SERVER['HTTP_OVERWRITE'] ?: null) == 'T';
 
 			// Dolphin is removing the file name when moving to root directory
 			if (empty($destination)) {
@@ -557,7 +558,7 @@ namespace KD2\WebDAV
 			}
 
 			$this->log('<= Destination: %s', $destination);
-			$this->log('<= Overwrite: %s (%s)', $overwrite ? 'Yes' : 'No', $_SERVER['HTTP_OVERWRITE'] ?? null);
+			$this->log('<= Overwrite: %s (%s)', $overwrite ? 'Yes' : 'No', $_SERVER['HTTP_OVERWRITE'] ?: null);
 
 			if (!$overwrite && $this->storage->exists($destination)) {
 				throw new Exception('File already exists and overwriting is disabled', 412);
@@ -588,7 +589,7 @@ namespace KD2\WebDAV
 			return null;
 		}
 
-		public function http_mkcol(string $uri): ?string
+		public function http_mkcol($uri)
 		{
 			if (!empty($_SERVER['CONTENT_LENGTH'])) {
 				throw new Exception('Unsupported body for MKCOL', 415);
@@ -601,7 +602,7 @@ namespace KD2\WebDAV
 			return null;
 		}
 
-		protected function extractRequestedProperties(string $body): ?array
+		protected function extractRequestedProperties($body)
 		{
 			// We only care about properties if the client asked for it
 			// If not, we consider that the client just requested to get everything
@@ -652,7 +653,7 @@ namespace KD2\WebDAV
 
 				$properties[$url . ':' . $name] = [
 					'name' => $name,
-					'ns_alias' => $found[3] ?? null,
+					'ns_alias' => $found[3] ?: null,
 					'ns_url' => $url,
 				];
 			}
@@ -660,7 +661,7 @@ namespace KD2\WebDAV
 			return $properties;
 		}
 
-		public function http_propfind(string $uri): ?string
+		public function http_propfind($uri)
 		{
 			// We only support depth of 0 and 1
 			$depth = isset($_SERVER['HTTP_DEPTH']) && empty($_SERVER['HTTP_DEPTH']) ? 0 : 1;
@@ -701,9 +702,9 @@ namespace KD2\WebDAV
 			$items = [$uri => $properties];
 
 			if ($depth) {
-				foreach ($this->storage->list($uri, $requested) as $file => $properties) {
+				foreach ($this->storage->list_($uri, $requested) as $file => $properties) {
 					$path = trim($uri . '/' . $file, '/');
-					$properties = $properties ?? $this->storage->properties($path, $requested_keys, 0);
+					$properties = $properties ?: $this->storage->properties($path, $requested_keys, 0);
 
 					if (!$properties) {
 						$this->log('!!! Cannot find "%s"', $path);
@@ -726,7 +727,7 @@ namespace KD2\WebDAV
 			];
 
 			$i = 0;
-			$requested ??= [];
+			isset($requested) or $requested = [];
 
 			foreach ($requested as $prop) {
 				if ($prop['ns_url'] == 'DAV:' || !$prop['ns_url']) {
@@ -773,7 +774,7 @@ namespace KD2\WebDAV
 				$uri = trim(rtrim($this->base_uri, '/') . '/' . ltrim($uri, '/'), '/');
 				$path = '/' . str_replace('%2F', '/', rawurlencode($uri));
 
-				if (($item['DAV::resourcetype'] ?? null) == 'collection' && $path != '/') {
+				if (($item['DAV::resourcetype'] ?: null) == 'collection' && $path != '/') {
 					$path .= '/';
 				}
 
@@ -789,20 +790,20 @@ namespace KD2\WebDAV
 					$ns = substr($name, 0, strrpos($name, ':'));
 					$tag_name = substr($name, strrpos($name, ':') + 1);
 
-					$alias = $root_namespaces[$ns] ?? null;
+					$alias = $root_namespaces[$ns] ?: null;
 					$attributes = '';
 
 					// The ownCloud Android app doesn't like formatted dates, it makes it crash.
 					// so force it to have a timestamp
 					if ($name == 'DAV::creationdate'
 						&& ($value instanceof \DateTimeInterface)
-						&& false !== stripos($_SERVER['HTTP_USER_AGENT'] ?? '', 'owncloud')) {
+						&& false !== stripos($_SERVER['HTTP_USER_AGENT'] ?: '', 'owncloud')) {
 						$value = $value->getTimestamp();
 					}
 					// ownCloud app crashes if mimetype is provided for a directory
 					// https://github.com/owncloud/android/issues/3768
 					elseif ($name == 'DAV::getcontenttype'
-						&& ($item['DAV::resourcetype'] ?? null) == 'collection') {
+						&& ($item['DAV::resourcetype'] ?: null) == 'collection') {
 						$value = null;
 					}
 
@@ -816,11 +817,11 @@ namespace KD2\WebDAV
 						// Change value to GMT
 						$value = clone $value;
 						$value->setTimezone(new \DateTimeZone('GMT'));
-						$value = $value->format(DATE_RFC7231);
+						$value = $value->format('D, d M Y H:i:s \G\M\T');
 					}
 					elseif (is_array($value)) {
-						$attributes = $value['attributes'] ?? '';
-						$value = $value['xml'] ?? null;
+						$attributes = $value['attributes'] ?: '';
+						$value = $value['xml'] ?: null;
 					}
 					else {
 						$value = htmlspecialchars($value, ENT_XML1);
@@ -855,7 +856,7 @@ namespace KD2\WebDAV
 							$pos = strrpos($name, ':');
 							$ns = substr($name, 0, strrpos($name, ':'));
 							$name = substr($name, strrpos($name, ':') + 1);
-							$alias = $root_namespaces[$ns] ?? null;
+							$alias = $root_namespaces[$ns] ?: null;
 
 							// NULL namespace, see Litmus FAQ for propnullns
 							if (!$alias) {
@@ -879,7 +880,7 @@ namespace KD2\WebDAV
 			return $out;
 		}
 
-		static public function parsePropPatch(string $body): array
+		static public function parsePropPatch($body)
 		{
 			if (false !== strpos($body, '<!DOCTYPE ')) {
 				throw new Exception('Invalid XML', 400);
@@ -942,7 +943,7 @@ namespace KD2\WebDAV
 			return $out;
 		}
 
-		public function http_proppatch(string $uri): ?string
+		public function http_proppatch($uri)
 		{
 			$uri = $this->_prefix($uri);
 			$this->checkLock($uri);
@@ -962,7 +963,7 @@ namespace KD2\WebDAV
 			return $out;
 		}
 
-		public function http_lock(string $uri): ?string
+		public function http_lock($uri)
 		{
 			$uri = $this->_prefix($uri);
 			// We don't use this currently, but maybe later?
@@ -1054,7 +1055,7 @@ namespace KD2\WebDAV
 			return $out;
 		}
 
-		public function http_unlock(string $uri): ?string
+		public function http_unlock($uri)
 		{
 			$uri = $this->_prefix($uri);
 			$token = $this->getLockToken();
@@ -1073,7 +1074,7 @@ namespace KD2\WebDAV
 			return null;
 		}
 
-		protected function getLockToken(): ?string
+		protected function getLockToken()
 		{
 			if (isset($_SERVER['HTTP_LOCK_TOKEN'])
 				&& preg_match('/<(.*?)>/', trim($_SERVER['HTTP_LOCK_TOKEN']), $match)) {
@@ -1088,7 +1089,7 @@ namespace KD2\WebDAV
 			}
 		}
 
-		protected function checkLock(string $uri, ?string $token = null): void
+		protected function checkLock($uri, $token = null)
 		{
 			if ($token === null) {
 				$token = $this->getLockToken();
@@ -1139,7 +1140,7 @@ namespace KD2\WebDAV
 			header('DAV: 1, 2, 3');
 		}
 
-		public function http_options(): void
+		public function http_options()
 		{
 			http_response_code(200);
 			$methods = 'GET HEAD PUT DELETE COPY MOVE PROPFIND MKCOL LOCK UNLOCK';
@@ -1152,14 +1153,14 @@ namespace KD2\WebDAV
 			header('MS-Author-Via: DAV');
 		}
 
-		public function log(string $message, ...$params)
+		public function log($message, ...$params)
 		{
 			if (PHP_SAPI == 'cli-server') {
 				file_put_contents('php://stderr', vsprintf($message, $params) . "\n");
 			}
 		}
 
-		protected function getURI(string $source): string
+		protected function getURI($source)
 		{
 			$uri = parse_url($source, PHP_URL_PATH);
 			$uri = rawurldecode($uri);
@@ -1184,10 +1185,10 @@ namespace KD2\WebDAV
 			return $uri;
 		}
 
-		public function route(?string $uri = null): bool
+		public function route($uri = null)
 		{
 			if (null === $uri) {
-				$uri = $_SERVER['REQUEST_URI'] ?? '/';
+				$uri = $_SERVER['REQUEST_URI'] ?: '/';
 			}
 
 			$this->original_uri = $uri;
@@ -1206,10 +1207,10 @@ namespace KD2\WebDAV
 
 			// Add some extra-logging for Litmus tests
 			if (isset($_SERVER['HTTP_X_LITMUS']) || isset($_SERVER['HTTP_X_LITMUS_SECOND'])) {
-				$this->log('X-Litmus: %s', $_SERVER['HTTP_X_LITMUS'] ?? $_SERVER['HTTP_X_LITMUS_SECOND']);
+				$this->log('X-Litmus: %s', $_SERVER['HTTP_X_LITMUS'] ?: $_SERVER['HTTP_X_LITMUS_SECOND']);
 			}
 
-			$method = $_SERVER['REQUEST_METHOD'] ?? null;
+			$method = $_SERVER['REQUEST_METHOD'] ?: null;
 
 			header_remove('Expires');
 			header_remove('Pragma');
@@ -1258,7 +1259,7 @@ namespace KD2\WebDAV
 			return true;
 		}
 
-		function error(Exception $e)
+		function error($e)
 		{
 			$this->log('=> %d - %s', $e->getCode(), $e->getMessage());
 
@@ -1275,7 +1276,7 @@ namespace KD2\WebDAV
 			printf('<?xml version="1.0" encoding="utf-8"?><d:error xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns"><s:message>%s</s:message></d:error>', htmlspecialchars($e->getMessage(), ENT_XML1));
 		}
 
-		static public function hmac(array $data, string $key = '')
+		static public function hmac($data, $key = '')
 		{
 			// Protect against length attacks by pre-hashing data
 			$data = array_map('sha1', $data);
@@ -1289,40 +1290,40 @@ namespace KD2\WebDAV
 		abstract class AbstractStorage
 	{
 
-		abstract public function get(string $uri): ?array;
+		abstract public function get($uri);
 
-		abstract public function exists(string $uri): bool;
+		abstract public function exists($uri);
 
-		abstract public function properties(string $uri, ?array $requested_properties, int $depth): ?array;
+		abstract public function properties($uri, $requested_properties, $depth);
 
-		public function setProperties(string $uri, string $body): void
+		public function setProperties($uri, $body)
 		{
 			// By default, properties are not saved
 		}
 
-		abstract public function put(string $uri, $pointer, ?string $hash_algo, ?string $hash, ?int $mtime): bool;
+		abstract public function put($uri, $pointer, $hash_algo, $hash, $mtime);
 
-		abstract public function delete(string $uri): void;
+		abstract public function delete($uri);
 
-		abstract public function copy(string $uri, string $destination): bool;
+		abstract public function copy($uri, $destination);
 
-		abstract public function move(string $uri, string $destination): bool;
+		abstract public function move($uri, $destination);
 
-		abstract public function mkcol(string $uri): void;
+		abstract public function mkcol($uri);
 
-		abstract public function list(string $uri, array $properties): iterable;
+		abstract public function list_($uri, $properties);
 
-		public function lock(string $uri, string $token, string $scope): void
+		public function lock($uri, $token, $scope)
 		{
 			// By default locking is not implemented
 		}
 
-		public function unlock(string $uri, string $token): void
+		public function unlock($uri, $token)
 		{
 			// By default locking is not implemented
 		}
 
-		public function getLock(string $uri, ?string $token = null): ?string
+		public function getLock($uri, $token = null)
 		{
 			// By default locking is not implemented, so NULL is always returned
 			return null;
@@ -1344,17 +1345,17 @@ namespace PicoDAV
 		 */
 		const PUT_IGNORE_PATTERN = '!^~(?:lock\.|^\._)|^(?:\.DS_Store|Thumbs\.db|desktop\.ini)$!';
 
-		protected string $path;
-		protected ?string $user = null;
+		protected $path;
+		protected $user = null;
 
-		public array $users = [];
+		public $users = [];
 
-		public function __construct(string $path)
+		public function __construct($path)
 		{
 			$this->path = $path . '/';
 		}
 
-		public function auth(): bool
+		public function auth()
 		{
 			if (ANONYMOUS_WRITE && ANONYMOUS_READ) {
 				return true;
@@ -1364,14 +1365,14 @@ namespace PicoDAV
 				return true;
 			}
 
-			$user = $_SERVER['PHP_AUTH_USER'] ?? null;
-			$password = $_SERVER['PHP_AUTH_PW'] ?? null;
+			$user = isset($_SERVER['PHP_AUTH_USER']) ? $_SERVER['PHP_AUTH_USER'] : null;
+			$password = isset($_SERVER['PHP_AUTH_PW']) ? $_SERVER['PHP_AUTH_PW'] : null;
 
 			if (!array_key_exists($user, $this->users)) {
 				return false;
 			}
 
-			$hash = $this->users[$user]['password'] ?? null;
+			$hash = $this->users[$user]['password'] ?: null;
 
 			// If no password is set, we accept any password as we consider that a .htaccess/.htpasswd
 			// access has been granted
@@ -1383,15 +1384,16 @@ namespace PicoDAV
 			return true;
 		}
 
-		static protected function glob(string $path, string $pattern = '', int $flags = 0): array
+		static protected function glob($path, $pattern = '', $flags = 0)
 		{
 			$path = preg_replace('/[\*\?\[\]]/', '\\\\$0', $path);
 			return glob($path . $pattern, $flags);
 		}
 
-		public function canRead(string $uri): bool
+		public function canRead($uri)
 		{
-			if (in_array($uri, INTERNAL_FILES)) {
+			global $INTERNAL_FILES;
+			if (in_array($uri, $INTERNAL_FILES)) {
 				return false;
 			}
 
@@ -1407,7 +1409,7 @@ namespace PicoDAV
 				return false;
 			}
 
-			$restrict = $this->users[$this->user]['restrict'] ?? [];
+			$restrict = $this->users[$this->user]['restrict'] ?: [];
 
 			if (!is_array($restrict) || empty($restrict)) {
 				return true;
@@ -1422,7 +1424,7 @@ namespace PicoDAV
 			return false;
 		}
 
-		public function canWrite(string $uri): bool
+		public function canWrite($uri)
 		{
 			if (!$this->auth() && !ANONYMOUS_WRITE) {
 				return false;
@@ -1440,7 +1442,7 @@ namespace PicoDAV
 				return false;
 			}
 
-			$restrict = $this->users[$this->user]['restrict_write'] ?? [];
+			$restrict = $this->users[$this->user]['restrict_write'] ?: [];
 
 			if (!is_array($restrict) || empty($restrict)) {
 				return true;
@@ -1455,15 +1457,15 @@ namespace PicoDAV
 			return false;
 		}
 
-		public function canOnlyCreate(string $uri): bool
+		public function canOnlyCreate($uri)
 		{
-			$restrict = $this->users[$this->user]['restrict_write'] ?? [];
+			$restrict = $this->users[$this->user]['restrict_write'] ?: [];
 
 			if (in_array($uri, $restrict, true)) {
 				return true;
 			}
 
-			$restrict = $this->users[$this->user]['restrict'] ?? [];
+			$restrict = $this->users[$this->user]['restrict'] ?: [];
 
 			if (in_array($uri, $restrict, true)) {
 				return true;
@@ -1472,7 +1474,7 @@ namespace PicoDAV
 			return false;
 		}
 
-		public function list(string $uri, ?array $properties): iterable
+		public function list_($uri, $properties)
 		{
 			if (!$this->canRead($uri . '/')) {
 				//throw new WebDAV_Exception('Access forbidden', 403);
@@ -1480,7 +1482,7 @@ namespace PicoDAV
 
 			$dirs = self::glob($this->path . $uri, '/*', \GLOB_ONLYDIR);
 			$dirs = array_map('basename', $dirs);
-			$dirs = array_filter($dirs, fn($a) => $this->canRead(ltrim($uri . '/' . $a, '/') . '/'));
+			$dirs = array_filter($dirs, function($a)use($uri){ return $this->canRead(ltrim($uri . '/' . $a, '/') . '/'); });
 			natcasesort($dirs);
 
 			$files = self::glob($this->path . $uri, '/*');
@@ -1488,17 +1490,17 @@ namespace PicoDAV
 			$files = array_diff($files, $dirs);
 
 			// Remove PHP files and dot-files from listings
-			$files = array_filter($files, fn($a) => $this->canRead(ltrim($uri . '/' . $a, '/')));
+			$files = array_filter($files, function($a)use($uri){ return $this->canRead(ltrim($uri . '/' . $a, '/')); });
 
 			natcasesort($files);
 
 			$files = array_flip(array_merge($dirs, $files));
-			$files = array_map(fn($a) => null, $files);
+			$files = array_map(function($a){ return null; }, $files);
 
 			return $files;
 		}
 
-		public function get(string $uri): ?array
+		public function get($uri)
 		{
 			if (!$this->canRead($uri)) {
 				throw new WebDAV_Exception('Access forbidden', 403);
@@ -1513,12 +1515,12 @@ namespace PicoDAV
 			return ['path' => $path];
 		}
 
-		public function exists(string $uri): bool
+		public function exists($uri)
 		{
 			return file_exists($this->path . $uri);
 		}
 
-		public function get_file_property(string $uri, string $name, int $depth)
+		public function get_file_property($uri, $name, $depth)
 		{
 			$target = $this->path . $uri;
 
@@ -1587,7 +1589,7 @@ namespace PicoDAV
 			return null;
 		}
 
-		public function properties(string $uri, ?array $properties, int $depth): ?array
+		public function properties($uri, $properties, $depth)
 		{
 			$target = $this->path . $uri;
 
@@ -1612,7 +1614,7 @@ namespace PicoDAV
 			return $out;
 		}
 
-		public function put(string $uri, $pointer, ?string $hash_algo, ?string $hash, ?int $mtime): bool
+		public function put($uri, $pointer, $hash_algo, $hash, $mtime)
 		{
 			if (preg_match(self::PUT_IGNORE_PATTERN, basename($uri))) {
 				return false;
@@ -1679,7 +1681,7 @@ namespace PicoDAV
 			return $new;
 		}
 
-		public function delete(string $uri): void
+		public function delete($uri)
 		{
 			if (!$this->canWrite($uri)) {
 				throw new WebDAV_Exception('Access forbidden', 403);
@@ -1711,7 +1713,7 @@ namespace PicoDAV
 			}
 		}
 
-		public function copymove(bool $move, string $uri, string $destination): bool
+		public function copymove($move, $uri, $destination)
 		{
 			if (!$this->canWrite($uri)
 				|| !$this->canWrite($destination)
@@ -1768,17 +1770,17 @@ namespace PicoDAV
 			return $overwritten;
 		}
 
-		public function copy(string $uri, string $destination): bool
+		public function copy($uri, $destination)
 		{
 			return $this->copymove(false, $uri, $destination);
 		}
 
-		public function move(string $uri, string $destination): bool
+		public function move($uri, $destination)
 		{
 			return $this->copymove(true, $uri, $destination);
 		}
 
-		public function mkcol(string $uri): void
+		public function mkcol($uri)
 		{
 			if (!$this->canWrite($uri)) {
 				throw new WebDAV_Exception('Access forbidden', 403);
@@ -1802,7 +1804,7 @@ namespace PicoDAV
 			mkdir($target, 0770);
 		}
 
-		static public function getDirectoryMTime(string $path): int
+		static public function getDirectoryMTime($path)
 		{
 			$last = 0;
 			$path = rtrim($path, '/');
@@ -1829,7 +1831,7 @@ namespace PicoDAV
 
 	class Server extends \KD2\WebDAV\Server
 	{
-		protected function html_directory(string $uri, iterable $list): ?string
+		protected function html_directory($uri, $list)
 		{
 			$out = parent::html_directory($uri, $list);
 
@@ -1840,7 +1842,7 @@ namespace PicoDAV
 			return $out;
 		}
 
-		public function route(?string $uri = null): bool
+		public function route($uri = null)
 		{
 			if (!ANONYMOUS_WRITE && !ANONYMOUS_READ && !$this->storage->auth()) {
 				$this->requireAuth();
@@ -1850,14 +1852,14 @@ namespace PicoDAV
 			return parent::route($uri);
 		}
 
-		protected function requireAuth(): void
+		protected function requireAuth()
 		{
 			http_response_code(401);
 			header('WWW-Authenticate: Basic realm="Please login"');
 			echo '<h2>Error 401</h2><h1>You need to login to access this.</h1>';
 		}
 
-		public function error(WebDAV_Exception $e)
+		public function error($e)
 		{
 			if ($e->getCode() == 403 && !$this->storage->auth() && count($this->storage->users)) {
 				return;
@@ -1866,9 +1868,9 @@ namespace PicoDAV
 			parent::error($e);
 		}
 
-		protected string $_log = '';
+		protected $_log = '';
 
-		public function log(string $message, ...$params): void
+		public function log($message, ...$params)
 		{
 			if (!HTTP_LOG_FILE) {
 				return;
@@ -1942,11 +1944,11 @@ RewriteRule ^.*$ /index.php [END]
 		$fp = fopen(__FILE__, 'r');
 
 		if ($relative_uri == '.webdav/webdav.js') {
-			fseek($fp, 52782, SEEK_SET);
+			fseek($fp, 52050, SEEK_SET);
 			echo fread($fp, 28039);
 		}
 		else {
-			fseek($fp, 52782 + 28039, SEEK_SET);
+			fseek($fp, 52050 + 28039, SEEK_SET);
 			echo fread($fp, 7004);
 		}
 
@@ -1956,7 +1958,9 @@ RewriteRule ^.*$ /index.php [END]
 	}
 
 	$config_file = $self_dir . '/.picodav.ini';
-	define('PicoDAV\INTERNAL_FILES', ['.picodav.ini', $self_dir, '.webdav/webdav.js', '.webdav/webdav.css']);
+	// define('PicoDAV\INTERNAL_FILES', ['.picodav.ini', $self_dir, '.webdav/webdav.js', '.webdav/webdav.css']);
+	global $INTERNAL_FILES;
+	$INTERNAL_FILES = ['.picodav.ini', $self_dir, '.webdav/webdav.js', '.webdav/webdav.css'];
 
 	const DEFAULT_CONFIG = [
 		'ANONYMOUS_READ' => true,
