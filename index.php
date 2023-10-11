@@ -2,8 +2,6 @@
 
 namespace KD2\WebDAV
 {
-	// error_reporting(0);
-
 	class Exception extends \RuntimeException {}
 
 	class Server
@@ -653,7 +651,7 @@ namespace KD2\WebDAV
 
 				$properties[$url . ':' . $name] = [
 					'name' => $name,
-					'ns_alias' => $found[3] ?: null,
+					'ns_alias' => isset($found[3]) ? $found[3]: null,
 					'ns_url' => $url,
 				];
 			}
@@ -1397,7 +1395,7 @@ namespace PicoDAV
 				return false;
 			}
 
-			if (preg_match('/\.(?:php\d?|phtml|phps)$|^\./i', $uri)) {
+			if (trim($uri, '/.') === '') {
 				return false;
 			}
 
@@ -1459,13 +1457,13 @@ namespace PicoDAV
 
 		public function canOnlyCreate($uri)
 		{
-			$restrict = $this->users[$this->user]['restrict_write'] ?: [];
+			$restrict = isset($this->users[$this->user]['restrict_write']) ? $this->users[$this->user]['restrict_write'] : [];
 
 			if (in_array($uri, $restrict, true)) {
 				return true;
 			}
 
-			$restrict = $this->users[$this->user]['restrict'] ?: [];
+			$restrict = isset($this->users[$this->user]['restrict']) ? $this->users[$this->user]['restrict'] : [];
 
 			if (in_array($uri, $restrict, true)) {
 				return true;
@@ -1480,12 +1478,12 @@ namespace PicoDAV
 				//throw new WebDAV_Exception('Access forbidden', 403);
 			}
 
-			$dirs = self::glob($this->path . $uri, '/*', \GLOB_ONLYDIR);
+			$dirs = self::glob($this->path . $uri, '/{,.}*', \GLOB_ONLYDIR | \GLOB_BRACE);
 			$dirs = array_map('basename', $dirs);
 			$dirs = array_filter($dirs, function($a)use($uri){ return $this->canRead(ltrim($uri . '/' . $a, '/') . '/'); });
 			natcasesort($dirs);
 
-			$files = self::glob($this->path . $uri, '/*');
+			$files = self::glob($this->path . $uri, '/{,.}*', \GLOB_BRACE);
 			$files = array_map('basename', $files);
 			$files = array_diff($files, $dirs);
 
@@ -1964,7 +1962,7 @@ RewriteRule ^.*$ /index.php [END]
 
 	const DEFAULT_CONFIG = [
 		'ANONYMOUS_READ' => true,
-		'ANONYMOUS_WRITE' => false,
+		'ANONYMOUS_WRITE' => write,
 		'HTTP_LOG_FILE' => null,
 	];
 
