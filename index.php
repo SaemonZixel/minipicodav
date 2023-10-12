@@ -535,8 +535,8 @@ namespace KD2\WebDAV
 		{
 			$uri = $this->_prefix($uri);
 
-			$destination = $_SERVER['HTTP_DESTINATION'] ?: null;
-			$depth = $_SERVER['HTTP_DEPTH'] ?: 1;
+			$destination = isset($_SERVER['HTTP_DESTINATION']) ? $_SERVER['HTTP_DESTINATION'] : null;
+			$depth = isset($_SERVER['HTTP_DEPTH']) ? $_SERVER['HTTP_DEPTH'] : 1;
 
 			if (!$destination) {
 				throw new Exception('Destination not supplied', 400);
@@ -548,7 +548,7 @@ namespace KD2\WebDAV
 				throw new Exception('Cannot move file to itself', 403);
 			}
 
-			$overwrite = ($_SERVER['HTTP_OVERWRITE'] ?: null) == 'T';
+			$overwrite = (isset($_SERVER['HTTP_OVERWRITE']) ? $_SERVER['HTTP_OVERWRITE'] : null) == 'T';
 
 			// Dolphin is removing the file name when moving to root directory
 			if (empty($destination)) {
@@ -556,7 +556,7 @@ namespace KD2\WebDAV
 			}
 
 			$this->log('<= Destination: %s', $destination);
-			$this->log('<= Overwrite: %s (%s)', $overwrite ? 'Yes' : 'No', $_SERVER['HTTP_OVERWRITE'] ?: null);
+			$this->log('<= Overwrite: %s (%s)', $overwrite ? 'Yes' : 'No', isset($_SERVER['HTTP_OVERWRITE']) ? $_SERVER['HTTP_OVERWRITE'] : null);
 
 			if (!$overwrite && $this->storage->exists($destination)) {
 				throw new Exception('File already exists and overwriting is disabled', 412);
@@ -702,7 +702,7 @@ namespace KD2\WebDAV
 			if ($depth) {
 				foreach ($this->storage->list_($uri, $requested) as $file => $properties) {
 					$path = trim($uri . '/' . $file, '/');
-					$properties = $properties ?: $this->storage->properties($path, $requested_keys, 0);
+					$properties = isset($properties) ? $properties : $this->storage->properties($path, $requested_keys, 0);
 
 					if (!$properties) {
 						$this->log('!!! Cannot find "%s"', $path);
@@ -733,7 +733,7 @@ namespace KD2\WebDAV
 				}
 
 				if (!array_key_exists($prop['ns_url'], $root_namespaces)) {
-					$root_namespaces[$prop['ns_url']] = $prop['ns_alias'] ?: 'rns' . $i++;
+					$root_namespaces[$prop['ns_url']] = isset($prop['ns_alias']) ? $prop['ns_alias'] : 'rns' . $i++;
 				}
 			}
 
@@ -772,7 +772,7 @@ namespace KD2\WebDAV
 				$uri = trim(rtrim($this->base_uri, '/') . '/' . ltrim($uri, '/'), '/');
 				$path = '/' . str_replace('%2F', '/', rawurlencode($uri));
 
-				if (($item['DAV::resourcetype'] ?: null) == 'collection' && $path != '/') {
+				if ((isset($item['DAV::resourcetype']) ? $item['DAV::resourcetype'] : null) == 'collection' && $path != '/') {
 					$path .= '/';
 				}
 
@@ -788,20 +788,20 @@ namespace KD2\WebDAV
 					$ns = substr($name, 0, strrpos($name, ':'));
 					$tag_name = substr($name, strrpos($name, ':') + 1);
 
-					$alias = $root_namespaces[$ns] ?: null;
+					$alias = isset($root_namespaces[$ns]) ? $root_namespaces[$ns] : null;
 					$attributes = '';
 
 					// The ownCloud Android app doesn't like formatted dates, it makes it crash.
 					// so force it to have a timestamp
 					if ($name == 'DAV::creationdate'
 						&& ($value instanceof \DateTimeInterface)
-						&& false !== stripos($_SERVER['HTTP_USER_AGENT'] ?: '', 'owncloud')) {
+						&& false !== stripos(isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : '', 'owncloud')) {
 						$value = $value->getTimestamp();
 					}
 					// ownCloud app crashes if mimetype is provided for a directory
 					// https://github.com/owncloud/android/issues/3768
 					elseif ($name == 'DAV::getcontenttype'
-						&& ($item['DAV::resourcetype'] ?: null) == 'collection') {
+						&& (isset($item['DAV::resourcetype']) ? $item['DAV::resourcetype'] : null) == 'collection') {
 						$value = null;
 					}
 
@@ -818,8 +818,8 @@ namespace KD2\WebDAV
 						$value = $value->format('D, d M Y H:i:s \G\M\T');
 					}
 					elseif (is_array($value)) {
-						$attributes = $value['attributes'] ?: '';
-						$value = $value['xml'] ?: null;
+						$attributes = isset($value['attributes']) ? $value['attributes'] : '';
+						$value = isset($value['xml']) ? $value['xml'] : null;
 					}
 					else {
 						$value = htmlspecialchars($value, ENT_XML1);
@@ -854,7 +854,7 @@ namespace KD2\WebDAV
 							$pos = strrpos($name, ':');
 							$ns = substr($name, 0, strrpos($name, ':'));
 							$name = substr($name, strrpos($name, ':') + 1);
-							$alias = $root_namespaces[$ns] ?: null;
+							$alias = isset($root_namespaces[$ns]) ? $root_namespaces[$ns] : null;
 
 							// NULL namespace, see Litmus FAQ for propnullns
 							if (!$alias) {
@@ -928,7 +928,7 @@ namespace KD2\WebDAV
 							$text = (string)$prop;
 						}
 
-						$out[$name] = ['action' => 'set', 'attributes' => $attributes ?: null, 'content' => $text ?: null];
+						$out[$name] = ['action' => 'set', 'attributes' => isset($attributes) ? $attributes : null, 'content' => isset($text) ? $text : null];
 					}
 					else {
 						$ns = $prop->getNamespaces();
@@ -1205,10 +1205,10 @@ namespace KD2\WebDAV
 
 			// Add some extra-logging for Litmus tests
 			if (isset($_SERVER['HTTP_X_LITMUS']) || isset($_SERVER['HTTP_X_LITMUS_SECOND'])) {
-				$this->log('X-Litmus: %s', $_SERVER['HTTP_X_LITMUS'] ?: $_SERVER['HTTP_X_LITMUS_SECOND']);
+				$this->log('X-Litmus: %s', isset($_SERVER['HTTP_X_LITMUS']) ? $_SERVER['HTTP_X_LITMUS'] : $_SERVER['HTTP_X_LITMUS_SECOND']);
 			}
 
-			$method = $_SERVER['REQUEST_METHOD'] ?: null;
+			$method = isset($_SERVER['REQUEST_METHOD']) ? $_SERVER['REQUEST_METHOD'] : null;
 
 			header_remove('Expires');
 			header_remove('Pragma');
@@ -1370,7 +1370,7 @@ namespace PicoDAV
 				return false;
 			}
 
-			$hash = $this->users[$user]['password'] ?: null;
+			$hash = isset($this->users[$user]['password']) ? $this->users[$user]['password'] : null;
 
 			// If no password is set, we accept any password as we consider that a .htaccess/.htpasswd
 			// access has been granted
@@ -1407,7 +1407,7 @@ namespace PicoDAV
 				return false;
 			}
 
-			$restrict = $this->users[$this->user]['restrict'] ?: [];
+			$restrict = isset($this->users[$this->user]['restrict']) ? $this->users[$this->user]['restrict'] : [];
 
 			if (!is_array($restrict) || empty($restrict)) {
 				return true;
@@ -1440,7 +1440,7 @@ namespace PicoDAV
 				return false;
 			}
 
-			$restrict = $this->users[$this->user]['restrict_write'] ?: [];
+			$restrict = isset($this->users[$this->user]['restrict_write']) ? $this->users[$this->user]['restrict_write'] : [];
 
 			if (!is_array($restrict) || empty($restrict)) {
 				return true;
@@ -1475,7 +1475,7 @@ namespace PicoDAV
 		public function list_($uri, $properties)
 		{
 			if (!$this->canRead($uri . '/')) {
-				//throw new WebDAV_Exception('Access forbidden', 403);
+				throw new WebDAV_Exception('Access forbidden', 403);
 			}
 
 			$dirs = self::glob($this->path . $uri, '/{,.}*', \GLOB_ONLYDIR | \GLOB_BRACE);
@@ -1762,7 +1762,7 @@ namespace PicoDAV
 			else {
 				$method($source, $target);
 
-				$this->getResourceProperties($uri)->move($destination);
+				// $this->getResourceProperties($uri)->move($destination);
 			}
 
 			return $overwritten;
@@ -1939,18 +1939,23 @@ RewriteRule ^.*$ /index.php [END]
 		header("Pragma: cache");
 		header("Cache-Control: max-age=" . $seconds_to_cache);
 
-		$fp = fopen(__FILE__, 'r');
+		// $fp = fopen(__FILE__, 'r');
+		$our_file_data = file_get_contents(__FILE__);
+		$webdav_js_offset = mb_strpos($our_file_data, '/* .webdav/'.'webdav.js */', 0, 'ISO-8859-1');
+		$webdav_css_offset = mb_strpos($our_file_data, '/* .webdav/'.'webdav.css */', 0, 'ISO-8859-1');
 
 		if ($relative_uri == '.webdav/webdav.js') {
-			fseek($fp, 52050, SEEK_SET);
-			echo fread($fp, 28039);
+			// fseek($fp, 52050, SEEK_SET);
+			// echo fread($fp, 28039);
+			echo mb_substr($our_file_data, $webdav_js_offset, $webdav_css_offset - $webdav_js_offset, 'ISO-8859-1');
 		}
 		else {
-			fseek($fp, 52050 + 28039, SEEK_SET);
-			echo fread($fp, 7004);
+			// fseek($fp, 52050 + 28039, SEEK_SET);
+			// echo fread($fp, 7004);
+			echo mb_substr($our_file_data, $webdav_css_offset, PHP_INT_MAX, 'ISO-8859-1');
 		}
 
-		fclose($fp);
+		// fclose($fp);
 
 		exit;
 	}
@@ -1960,10 +1965,10 @@ RewriteRule ^.*$ /index.php [END]
 	global $INTERNAL_FILES;
 	$INTERNAL_FILES = ['.picodav.ini', $self_dir, '.webdav/webdav.js', '.webdav/webdav.css'];
 
-	const DEFAULT_CONFIG = [
+	$DEFAULT_CONFIG = [
 		'ANONYMOUS_READ' => true,
-		'ANONYMOUS_WRITE' => write,
-		'HTTP_LOG_FILE' => null,
+		'ANONYMOUS_WRITE' => true,
+		'HTTP_LOG_FILE' => '/srv/http_topnlab/wp-content/plugins/minipicodav/debug.log',
 	];
 
 	$config = [];
@@ -2006,12 +2011,12 @@ RewriteRule ^.*$ /index.php [END]
 		$storage->users = $users;
 	}
 
-	foreach (DEFAULT_CONFIG as $key => $value) {
+	foreach ($DEFAULT_CONFIG as $key => $value) {
 		if (array_key_exists($key, $config)) {
 			$value = $config[$key];
 		}
 
-		if (is_bool(DEFAULT_CONFIG[$key])) {
+		if (is_bool($DEFAULT_CONFIG[$key])) {
 			$value = boolval($value);
 		}
 
@@ -2032,6 +2037,7 @@ RewriteRule ^.*$ /index.php [END]
 	exit;
 
 ?>
+/* .webdav/webdav.js */
 var css_url = document.currentScript.src.replace(/\/[^\/]+$/, '') + '/webdav.css';
 
 const WebDAVNavigator = (url, options) => {
@@ -2916,6 +2922,7 @@ if (url = document.querySelector('html').getAttribute('data-webdav-url')) {
 		'wopi_discovery_url': document.querySelector('html').getAttribute('data-wopi-discovery-url'),
 	});
 }
+/* .webdav/webdav.css */
 :root {
 	--bg-color: #fff;
 	--fg-color: #000;
